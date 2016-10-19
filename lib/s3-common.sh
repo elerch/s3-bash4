@@ -113,6 +113,21 @@ getAccessKeyFromAWSCredentials() {
 }
 
 ##
+# Reads default region from the profile selected
+# Arguments:
+#   $1 profile name
+# Output:
+#   string region name
+##
+getDefaultRegionFromProfile() {
+  fgrep -A 2 ${1:-default} $HOME/.aws/config | \
+    tail -n 2                                | \
+    fgrep region                             | \
+    cut -d = -f 2                            | \
+    tr -d ' '
+}
+
+##
 # Reads, validates and return aws secret stored in a file
 # Arguments:
 #   $1 path to secret file

@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+#
+# Generic curl on AWS
+# (c) 2016 Emil Lerch <emil@lerch.org>
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not
+# use this file except in compliance with the License. You may obtain a copy of
+# the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations under
+# the License.
+
+set -euo pipefail
+
+readonly PROJECT_PATH=$( cd $(dirname $0) ; cd ../; pwd -P )
+readonly SCRIPT_NAME="$(basename $0)"
+readonly METHOD="GET"
+
+# Includes
+source ${PROJECT_PATH}/lib/s3-common.sh
+
+##
+# Print help and exit
+# Arguments:
+#   $1 int exit code
+# Output:
+#   string help
+##
+printUsageAndExitWith() {
+  printf "Usage:\n"
+  printf "  ${SCRIPT_NAME} [-vi] [-k key] [-s file] [-r region] resource_path\n"
+  printf "  ${SCRIPT_NAME} -h\n"
+  printf "Example:\n"
+  printf "  ${SCRIPT_NAME} -k key -s secret -r eu-central-1 /bucket/file.ext\n"
+  printf "Options:\n"
+  printf "     --debug\tEnable debugging mode\n"
+  printf "  -h,--help\tPrint this help\n"
+  printf "  -i,--insecure\tUse http instead of https\n"
+  printf "  -k,--key\tAWS Access Key ID. Default to environment variable AWS_ACCESS_KEY_ID\n"
+  printf "  -r,--region\tAWS S3 Region. Default to environment variable AWS_DEFAULT_REGION\n"
+  printf "  -v,--verbose\tVerbose output\n"
+  printf "     --version\tShow version\n"
+  exit $1
+}
+
+##
+# Parse command line and set global variables
+# Arguments:
+#   $@ command line
+# Globals:
+#   AWS_ACCESS_KEY_ID     string
+#   AWS_SECRET_ACCESS_KEY string
+#   AWS_REGION            string
+#   RESOURCE_PATH         string
+#   VERBOSE               bool
+#   INSECURE              bool
+#   DEBUG                 bool
+##
+parseCommandLine() {
+  # Init globals
+  AWS_PROFILE="default"
+  AWS_REGION=${AWS_DEFAULT_REGION:-$(getDefaultRegionFromProfile)}
+  AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-$(getAccessKeyFromAWSCredentials)}
+  AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-$(getSecretFromAWSCredentials)}
+  VERBOSE=false
+  INSECURE=false
+  DEBUG=false
+
+  # Parse options
+  local remaining=
+  local secretKeyFile=
+  while [[ $# > 0 ]]; do
+    local key="$1"
+    case ${key} in
+      --version)       showVersionAndExit;;
+      --debug)         DEBUG=true;;
+      -h|--help)       printUsageAndExitWith 0;;
+      -v|--verbose)    VERBOSE=true;;
+      -i|--insecure)   INSECURE=true;;
+      -X|--request)    assertArgument $0; METHOD=$2; shift;;
+      -r|--region)     assertArgument $@; AWS_REGION=$2; shift;;
+      -p|--profile)    assertArgument $@; AWS_PROFILE=$2; shift;;
+      -*)              err "Unknown option $1"
+                       printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE};;
+      *)               remaining="${remaining} \"${key}\"";;
+    esac
+    shift
+  done
+
+  # Set the non-parameters back into the positional parameters ($1 $2 ..)
+  eval set -- ${remaining}
+
+  # Parse arguments
+  if [[ $# != 1 ]]; then
+    err "You need to specify the resource path to download e.g. /bucket/file.ext"
+    printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
+  fi
+
+  #assertResourcePath "$1"
+  RESOURCE_PATH="$1"
+
+  if [[ -z "${AWS_ACCESS_KEY_ID}" ]]; then
+    err "AWS Access Key ID not specified"
+    printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
+  fi
+  if [[ -z "${AWS_SECRET_ACCESS_KEY}" ]]; then
+    err "AWS Secret Access Key not specified"
+    printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
+  fi
+
+  # Freeze globals
+  readonly AWS_REGION
+  readonly AWS_PROFILE
+  readonly AWS_ACCESS_KEY_ID
+  readonly AWS_SECRET_ACCESS_KEY
+  readonly RESOURCE_PATH
+  readonly DEBUG
+  readonly VERBOSE
+  readonly INSECURE
+}
+
+##
+# Main routine
+##
+main() {
+  checkEnvironment
+  parseCommandLine "$@"
+  performGenericRequest
+}
+
+main "$@"
+
+# curl output from s3-get
+# curl --fail --verbose \
+#      -H Host: s3-us-west-2.amazonaws.com \
+#      -H x-amz-content-sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 \
+#      -H x-amz-date: 20161019T213125Z \
+#      -H Authorization: AWS4-HMAC-SHA256 Credential=AKIAJELISPMYMMMO644A/20161019/us-west-2/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=b8da4b84e287728423976ba09465265fe2545cfcb5dd7a0646cc7597524a2ebe \
+#      http://s3-us-west-2.amazonaws.com/emil/testCSE
+
+# Should be possible with:
+# aws-curl http://s3-us-west-2.amazonaws.com/emil/testCSE
+
