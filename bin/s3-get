@@ -137,8 +137,8 @@ parseCommandLine() {
 ##
 main() {
   checkEnvironment
-  parseCommandLine $@
+  parseCommandLine "$@"
   performRequest
 }
 
-main $@
+main "$@"

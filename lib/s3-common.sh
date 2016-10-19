@@ -161,7 +161,7 @@ hex256() {
 #   string hash
 ##
 sha256Hash() {
-  local output=$(printf "$1" | shasum -a 256)
+  local output=$(printf '%b' "$1" | shasum -a 256)
   echo "${output%% *}"
 }
 
@@ -186,8 +186,9 @@ sha256HashFile() {
 #   string signature
 ##
 hmac_sha256() {
-  printf "$2" | openssl dgst -binary -hex -sha256 -mac HMAC -macopt hexkey:$1 \
-              | sed 's/^.* //'
+  printf '%b' "$2" | openssl dgst -binary -hex -sha256 \
+                     -mac HMAC -macopt hexkey:$1       \
+                   | sed 's/^.* //'
 }
 
 ##
