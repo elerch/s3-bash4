@@ -68,13 +68,48 @@ assertFileExists() {
 ##
 checkEnvironment()
 {
-  programs=(openssl curl printf echo sed awk od date shasum pwd dirname)
+  programs=(openssl curl printf echo sed awk od date shasum pwd dirname\
+            cut fgrep tail head)
   for program in "${programs[@]}"; do
     if [ ! -x "$(which $program)" ]; then
       err "$program is required to run"
       exit $INVALID_ENVIRONMENT_EXIT_CODE
     fi
   done
+}
+
+##
+# Reads, validates and return aws secret stored in AWS credentials
+# Arguments:
+#   $1 profile name
+# Output:
+#   string AWS secret
+##
+getSecretFromAWSCredentials() {
+  local credentials=$(fgrep -A 2 ${1:-default}\
+                     $HOME/.aws/credentials | tail -n 2)
+  local secret=$(echo "$credentials" | fgrep secret | cut -f2 -d= | sed "s/ //")
+
+  # exact string size should be 40.
+  if [[ ${#secret} != 40 ]]; then
+    err $errStr
+    exit $INVALID_USER_DATA_EXIT_CODE
+  fi
+  echo "$secret"
+}
+
+##
+# Reads, validates and return aws access key stored in AWS credentials
+# Arguments:
+#   $1 profile name
+# Output:
+#   string AWS Access key
+##
+getAccessKeyFromAWSCredentials() {
+  local credentials=$(fgrep -A 2 ${1:-default}\
+                     $HOME/.aws/credentials | tail -n 2)
+  local key=$(echo "$credentials" | fgrep id | cut -f2 -d= | sed "s/ //")
+  echo "$key"
 }
 
 ##
