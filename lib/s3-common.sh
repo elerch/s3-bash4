@@ -258,6 +258,113 @@ urlEncode() {
 ##
 # Perform request to S3
 # Uses the following Globals:
+#   AWS_ACCESS_KEY_ID     string
+#   AWS_SECRET_ACCESS_KEY string
+#   AWS_REGION            string
+#   RESOURCE_PATH         string
+#   PUBLISH               bool
+#   DEBUG                 bool
+#   VERBOSE               bool
+#   INSECURE              bool
+##
+performGenericRequest() {
+  local timestamp=$(date -u "+%Y-%m-%d %H:%M:%S")
+  local isoTimestamp=$(date -ud "${timestamp}" "+%Y%m%dT%H%M%SZ")
+  local dateScope=$(date -ud "${timestamp}" "+%Y%m%d")
+  local host=$(printf '%b' "${RESOURCE_PATH}" |sed 's/^.*:\/\///' |cut -f1 -d/)
+  local requestPath=$RESOURCE_PATH
+  local resourcePath=$(printf '%b' "${RESOURCE_PATH}" \
+                        |sed 's/^.*:\/\///' |cut -f2- -d/)
+  resourcePath=$(urlEncode "/$resourcePath"|sed 's/%2F/\//g')
+
+  # Generate payload hash
+  if [[ $METHOD == "PUT" ]]; then
+    local payloadHash=$(sha256HashFile $FILE_TO_UPLOAD)
+  else
+    local payloadHash=$(sha256Hash "")
+  fi
+
+  local cmd=("curl")
+  local headers=
+  local headerList=
+
+  if [[ ${DEBUG} != true ]]; then
+    cmd+=("--fail")
+  fi
+
+  if [[ ${VERBOSE} == true ]]; then
+    cmd+=("--verbose")
+  fi
+
+  if [[ ${METHOD} == "PUT" ]]; then
+    cmd+=("-T" "${FILE_TO_UPLOAD}")
+  fi
+
+  if [[ ${METHOD} != "GET" ]]; then
+    cmd+=("-X" "${METHOD}") # curl whines that GET is the default
+  fi
+
+  if [[ ${METHOD} == "PUT" && ! -z "${CONTENT_TYPE}" ]]; then
+    cmd+=("-H" "Content-Type: ${CONTENT_TYPE}")
+    headers+="content-type:${CONTENT_TYPE}\n"
+    headerList+="content-type;"
+  fi
+
+  cmd+=("-H" "Host: ${host}")
+  headers+="host:${host}\n"
+  headerList+="host;"
+
+  if [[ ${METHOD} == "PUT" && "${PUBLISH}" == true ]]; then
+    cmd+=("-H" "x-amz-acl: public-read")
+    headers+="x-amz-acl:public-read\n"
+    headerList+="x-amz-acl;"
+  fi
+
+  cmd+=("-H" "x-amz-content-sha256: ${payloadHash}")
+  headers+="x-amz-content-sha256:${payloadHash}\n"
+  headerList+="x-amz-content-sha256;"
+
+  cmd+=("-H" "x-amz-date: ${isoTimestamp}")
+  headers+="x-amz-date:${isoTimestamp}"
+  headerList+="x-amz-date"
+
+  # Generate canonical request
+  local canonicalRequest="${METHOD}
+${resourcePath}
+
+${headers}
+
+${headerList}
+${payloadHash}"
+
+  # Generated request hash
+  local hashedRequest=$(sha256Hash "${canonicalRequest}")
+
+  # Generate signing data
+  local stringToSign="AWS4-HMAC-SHA256
+${isoTimestamp}
+${dateScope}/${AWS_REGION}/s3/aws4_request
+${hashedRequest}"
+
+  # Sign data
+  local signature=$(sign "${AWS_SECRET_ACCESS_KEY}" "${dateScope}" "${AWS_REGION}" \
+                   "s3" "${stringToSign}")
+
+  local authorizationHeader="AWS4-HMAC-SHA256 Credential=${AWS_ACCESS_KEY_ID}/${dateScope}/${AWS_REGION}/s3/aws4_request, SignedHeaders=${headerList}, Signature=${signature}"
+  cmd+=("-H" "Authorization: ${authorizationHeader}")
+
+  cmd+=("${requestPath}")
+
+  # Curl
+  if [[ ${VERBOSE} == true ]]; then
+    echo "${cmd[@]}"
+  fi
+  "${cmd[@]}"
+}
+
+##
+# Perform request to S3
+# Uses the following Globals:
 #   METHOD                string
 #   AWS_ACCESS_KEY_ID     string
 #   AWS_SECRET_ACCESS_KEY string
