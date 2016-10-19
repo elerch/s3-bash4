@@ -266,7 +266,10 @@ performRequest() {
   if [[ ${METHOD} == "PUT" ]]; then
     cmd+=("-T" "${FILE_TO_UPLOAD}")
   fi
-  cmd+=("-X" "${METHOD}")
+
+  if [[ ${METHOD} != "GET" ]]; then
+    cmd+=("-X" "${METHOD}") # curl whines that GET is the default
+  fi
 
   if [[ ${METHOD} == "PUT" && ! -z "${CONTENT_TYPE}" ]]; then
     cmd+=("-H" "Content-Type: ${CONTENT_TYPE}")
