@@ -224,6 +224,22 @@ convS3RegionToEndpoint() {
 }
 
 ##
+# Url encode a string
+#   $1 string
+##
+urlEncode() {
+  local LANG=C
+  local length="${#1}"
+  for (( i = 0; i < length; i++ )); do
+    local c="${1:i:1}"
+    case $c in
+      [a-zA-Z0-9.~_-]) printf "$c" ;;
+      *) printf '%%%02X' "'$c" ;;
+    esac
+  done
+}
+
+##
 # Perform request to S3
 # Uses the following Globals:
 #   METHOD                string
@@ -243,6 +259,7 @@ performRequest() {
   local isoTimestamp=$(date -ud "${timestamp}" "+%Y%m%dT%H%M%SZ")
   local dateScope=$(date -ud "${timestamp}" "+%Y%m%d")
   local host=$(convS3RegionToEndpoint "${AWS_REGION}")
+  local resourcePath=$(urlEncode "$RESOURCE_PATH"|sed 's/%2F/\//g')
 
   # Generate payload hash
   if [[ $METHOD == "PUT" ]]; then
@@ -297,7 +314,7 @@ performRequest() {
 
   # Generate canonical request
   local canonicalRequest="${METHOD}
-${RESOURCE_PATH}
+${resourcePath}
 
 ${headers}
 
@@ -324,7 +341,7 @@ ${hashedRequest}"
   if [[ $INSECURE == false ]]; then
     protocol="http"
   fi
-  cmd+=("${protocol}://${host}${RESOURCE_PATH}")
+  cmd+=("${protocol}://${host}${resourcePath}")
 
   # Curl
   "${cmd[@]}"
