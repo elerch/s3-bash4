@@ -36,14 +36,12 @@ printUsageAndExitWith() {
   printf "  ${SCRIPT_NAME} [-vi] [-k key] [-s file] [-r region] resource_path\n"
   printf "  ${SCRIPT_NAME} -h\n"
   printf "Example:\n"
-  printf "  ${SCRIPT_NAME} -k key -s secret -r eu-central-1 /bucket/file.ext\n"
+  printf "  ${SCRIPT_NAME} -r eu-central-1 /bucket/file.ext\n"
   printf "Options:\n"
   printf "     --debug\tEnable debugging mode\n"
   printf "  -h,--help\tPrint this help\n"
   printf "  -i,--insecure\tUse http instead of https\n"
-  printf "  -k,--key\tAWS Access Key ID. Default to environment variable AWS_ACCESS_KEY_ID\n"
   printf "  -r,--region\tAWS S3 Region. Default to environment variable AWS_DEFAULT_REGION\n"
-  printf "  -s,--secret\tFile containing AWS Secret Access Key. If not set, secret will be environment variable AWS_SECRET_ACCESS_KEY\n"
   printf "  -v,--verbose\tVerbose output\n"
   printf "     --version\tShow version\n"
   exit $1
@@ -83,8 +81,6 @@ parseCommandLine() {
       -v|--verbose)    VERBOSE=true;;
       -i|--insecure)   INSECURE=true;;
       -r|--region)     assertArgument $@; AWS_REGION=$2; shift;;
-      -k|--key)        assertArgument $@; AWS_ACCESS_KEY_ID=$2; shift;;
-      -s|--secret)     assertArgument $@; secretKeyFile=$2; shift;;
       -*)              err "Unknown option $1"
                        printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE};;
       *)               remaining="${remaining} \"${key}\"";;
@@ -95,11 +91,6 @@ parseCommandLine() {
   # Set the non-parameters back into the positional parameters ($1 $2 ..)
   eval set -- ${remaining}
 
-  # Read secret file if set
-  if ! [[ -z "${secretKeyFile}" ]]; then
-   AWS_SECRET_ACCESS_KEY=$(processAWSSecretFile "${secretKeyFile}")
-  fi
-
   # Parse arguments
   if [[ $# != 1 ]]; then
     err "You need to specify the resource path to download e.g. /bucket/file.ext"
@@ -107,7 +98,12 @@ parseCommandLine() {
   fi
 
   assertResourcePath "$1"
-  RESOURCE_PATH="$1"
+  if [[ ${INSECURE} == true ]]; then
+    RESOURCE_PATH="http://"
+  else
+    RESOURCE_PATH="https://"
+  fi
+  RESOURCE_PATH+=$(convS3RegionToEndpoint "${AWS_REGION}")"$1"
 
   if [[ -z "${AWS_REGION}" ]]; then
     err "AWS Region not specified"
@@ -138,7 +134,7 @@ parseCommandLine() {
 main() {
   checkEnvironment
   parseCommandLine "$@"
-  performRequest
+  performGenericRequest
 }
 
 main "$@"
