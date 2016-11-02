@@ -19,7 +19,6 @@ set -euo pipefail
 
 readonly PROJECT_PATH=$( cd $(dirname $0) ; cd ../; pwd -P )
 readonly SCRIPT_NAME="$(basename $0)"
-readonly METHOD="GET"
 
 # Includes
 source ${PROJECT_PATH}/lib/s3-common.sh
@@ -70,6 +69,8 @@ parseCommandLine() {
   VERBOSE=false
   INSECURE=false
   DEBUG=false
+  OPTIONS=()
+  METHOD="GET"
 
   # Parse options
   local remaining=
@@ -82,11 +83,11 @@ parseCommandLine() {
       -h|--help)       printUsageAndExitWith 0;;
       -v|--verbose)    VERBOSE=true;;
       -i|--insecure)   INSECURE=true;;
-      -X|--request)    assertArgument $0; METHOD=$2; shift;;
-      -r|--region)     assertArgument $@; AWS_REGION=$2; shift;;
+      -X|--request)    assertArgument $@; METHOD=$2; OPTIONS+=("-X" "$2"); shift;;
+      -H|--header)     assertArgument $@; OPTIONS+=("-H" "$2"); shift;;
       -p|--profile)    assertArgument $@; AWS_PROFILE=$2; shift;;
-      -*)              err "Unknown option $1"
-                       printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE};;
+      -*)              $DEBUG && echo "Warn: unknown option $1"
+                       OPTIONS+=("$1" "$2"); shift;;
       *)               remaining="${remaining} \"${key}\"";;
     esac
     shift
@@ -101,7 +102,6 @@ parseCommandLine() {
     printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
   fi
 
-  #assertResourcePath "$1"
   RESOURCE_PATH="$1"
 
   if [[ -z "${AWS_ACCESS_KEY_ID}" ]]; then
@@ -122,6 +122,7 @@ parseCommandLine() {
   readonly DEBUG
   readonly VERBOSE
   readonly INSECURE
+  readonly OPTIONS
 }
 
 ##
@@ -134,15 +135,4 @@ main() {
 }
 
 main "$@"
-
-# curl output from s3-get
-# curl --fail --verbose \
-#      -H Host: s3-us-west-2.amazonaws.com \
-#      -H x-amz-content-sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 \
-#      -H x-amz-date: 20161019T213125Z \
-#      -H Authorization: AWS4-HMAC-SHA256 Credential=AKIAJELISPMYMMMO644A/20161019/us-west-2/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=b8da4b84e287728423976ba09465265fe2545cfcb5dd7a0646cc7597524a2ebe \
-#      http://s3-us-west-2.amazonaws.com/emil/testCSE
-
-# Should be possible with:
-# aws-curl http://s3-us-west-2.amazonaws.com/emil/testCSE
 

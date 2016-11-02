@@ -301,13 +301,7 @@ performGenericRequest() {
                         |sed 's/^.*:\/\///' |cut -f2- -d/)
   resourcePath=$(urlEncode "/$resourcePath"|sed 's/%2F/\//g')
 
-  # Generate payload hash
-  if [[ $METHOD == "PUT" ]]; then
-    local payloadHash=$(sha256HashFile $FILE_TO_UPLOAD)
-  else
-    local payloadHash=$(sha256Hash "")
-  fi
-
+  local payloadHash=$(sha256Hash "")
   local cmd=("curl")
   local headers=
   local headerList=
@@ -320,13 +314,18 @@ performGenericRequest() {
     cmd+=("--verbose")
   fi
 
-  cmd+=("-H" "Host: ${host}")
-  cmd+=("-H" "x-amz-content-sha256: ${payloadHash}")
-  cmd+=("-H" "x-amz-date: ${isoTimestamp}")
   for ((inx=0; inx<${#OPTIONS[*]}; inx+=2));
   do
     cmd+=("${OPTIONS[inx]}" "${OPTIONS[inx+1]}")
+    # Generate payload hash
+    if [[ "${OPTIONS[inx]}" == "-T" ]]; then
+      payloadHash=$(sha256HashFile "${OPTIONS[inx+1]}") 
+    fi
   done
+
+  cmd+=("-H" "Host: ${host}")
+  cmd+=("-H" "x-amz-content-sha256: ${payloadHash}")
+  cmd+=("-H" "x-amz-date: ${isoTimestamp}")
 
   headersArr=()
   for ((inx=0; inx<${#cmd[*]}; inx++));
