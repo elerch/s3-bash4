@@ -86,6 +86,7 @@ parseCommandLine() {
       -X|--request)    assertArgument $@; METHOD=$2; OPTIONS+=("-X" "$2"); shift;;
       -H|--header)     assertArgument $@; OPTIONS+=("-H" "$2"); shift;;
       -p|--profile)    assertArgument $@; AWS_PROFILE=$2; shift;;
+      -T|--upload-file) assertFileExists $2; OPTIONS+=("-T" "$2"); shift;;
       -*)              $DEBUG && echo "Warn: unknown option $1"
                        OPTIONS+=("$1" "$2"); shift;;
       *)               remaining="${remaining} \"${key}\"";;
@@ -98,7 +99,7 @@ parseCommandLine() {
 
   # Parse arguments
   if [[ $# != 1 ]]; then
-    err "You need to specify the resource path to download e.g. /bucket/file.ext"
+    err "You need to specify the endpoint URL" 
     printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
   fi
 

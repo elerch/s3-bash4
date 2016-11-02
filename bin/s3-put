@@ -19,7 +19,6 @@ set -euo pipefail
 
 readonly PROJECT_PATH=$( cd $(dirname $0) ; cd ../; pwd -P )
 readonly SCRIPT_NAME="$(basename $0)"
-readonly METHOD="PUT"
 
 # Includes
 source ${PROJECT_PATH}/lib/s3-common.sh
@@ -39,14 +38,13 @@ printUsageAndExitWith() {
   printf "  ${SCRIPT_NAME} -k key -s secret -r eu-central-1 -T file.ext -c text/plain /bucket/file.ext\n"
   printf "Options:\n"
   printf "  -c,--content-type\tMIME content type\n"
-  printf "     --debug\tEnable debugging mode\n"
   printf "  -h,--help\tPrint this help\n"
   printf "  -i,--insecure\tUse http instead of https\n"
   printf "  -p,--public\tGrant public read on uploaded file\n"
-  printf "  -r,--region\tAWS S3 Region. Default to environment variable AWS_DEFAULT_REGION\n"
   printf "  -T,--upload-file\tPath to file to upload\n"
-  printf "  -v,--verbose\tVerbose output\n"
   printf "     --version\tShow version\n"
+  printf "\n"
+  printf "Other options used will be passed through to aws-curl directly\n"
 
   exit $1
 }
@@ -56,30 +54,19 @@ printUsageAndExitWith() {
 # Arguments:
 #   $@ command line
 # Sets the following Globals:
-#   AWS_ACCESS_KEY_ID     string
-#   AWS_SECRET_ACCESS_KEY string
-#   AWS_REGION            string
 #   RESOURCE_PATH         string
 #   FILE_TO_UPLOAD        string
 #   CONTENT_TYPE          string
 #   PUBLISH               bool
-#   VERBOSE               bool
 #   INSECURE              bool
-#   DEBUG                 bool
 #   PUBLISH               bool
 ##
 parseCommandLine() {
   # Init globals
   AWS_REGION=${AWS_DEFAULT_REGION:-$(getDefaultRegionFromProfile)}
-  AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-$(getAccessKeyFromAWSCredentials)}
-  AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-$(getSecretFromAWSCredentials)}
   FILE_TO_UPLOAD=
-  CONTENT_TYPE=
-  PUBLISH=false
-  VERBOSE=false
-  INSECURE=false
-  DEBUG=false
-  OPTIONS=("-X" "PUT")
+  RESOURCE_PATH="https://"
+  CURL_OPTS="-X PUT "
 
   # Parse options
   local remaining=
@@ -87,17 +74,18 @@ parseCommandLine() {
   while [[ $# > 0 ]]; do
     local key="$1"
     case ${key} in
-      --version)          showVersionAndExit;;
-      --debug)            DEBUG=true;;
       -h|--help)          printUsageAndExitWith 0;;
-      -v|--verbose)       VERBOSE=true;;
-      -i|--insecure)      INSECURE=true;;
-      -p|--publish)       PUBLISH=true;;
-      -c|--content-type)  assertArgument $@; CONTENT_TYPE=$2; shift;;
-      -T|--upload-file)   assertArgument $@; FILE_TO_UPLOAD=$2; shift;;
+      -i|--insecure)      RESOURCE_PATH="http://";;
+      -p|--publish)       CURL_OPTS+="-H \"x-amz-acl: public-read\" ";;
+      -c|--content-type)  assertArgument $@
+                          CURL_OPTS+="-H \"Content-Type: $2\" "; shift;;
+      -T|--upload-file)   assertArgument $@; CURL_OPTS+="-T $2 "; shift;;
       -r|--region)        assertArgument $@; AWS_REGION=$2; shift;;
-      -*)                 err "Unknown option $1"
-                          printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE};;
+      -*)                 if [[ ${2:0:1} == "-" ]]; then
+			    CURL_OPTS+="$1 "
+                          else
+                            CURL_OPTS+="$1" "$2 "; shift 
+			  fi;;
       *)                  remaining="${remaining} \"${key}\"";;
     esac
     shift
@@ -113,52 +101,7 @@ parseCommandLine() {
   fi
 
   assertResourcePath $1
-  if [[ ${INSECURE} == true ]]; then
-    RESOURCE_PATH="http://"
-  else
-    RESOURCE_PATH="https://"
-  fi
   RESOURCE_PATH+=$(convS3RegionToEndpoint "${AWS_REGION}")"$1"
-
-  if [[ -z "${FILE_TO_UPLOAD}" ]]; then
-    err "You need to specify the file to upload using -T"
-    printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
-  fi
-  assertFileExists "${FILE_TO_UPLOAD}"
-
-  if [[ -z "${AWS_REGION}" ]]; then
-    err "AWS Region not specified"
-    printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
-  fi
-  if [[ -z "${AWS_ACCESS_KEY_ID}" ]]; then
-    err "AWS Access Key ID not specified"
-    printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
-  fi
-  if [[ -z "${AWS_SECRET_ACCESS_KEY}" ]]; then
-    err "AWS Secret Access Key not specified"
-    printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
-  fi
-
-  OPTIONS+=("-T" "${FILE_TO_UPLOAD}")
-  if [[ ! -z "${CONTENT_TYPE}" ]]; then
-    OPTIONS+=("-H" "Content-Type: ${CONTENT_TYPE}")
-  fi
-
-  if [[ "${PUBLISH}" == true ]]; then
-    OPTIONS+=("-H" "x-amz-acl: public-read")
-  fi
-
-  # Freeze globals
-  readonly AWS_REGION
-  readonly AWS_ACCESS_KEY_ID
-  readonly AWS_SECRET_ACCESS_KEY
-  readonly RESOURCE_PATH
-  readonly CONTENT_TYPE
-  readonly PUBLISH
-  readonly DEBUG
-  readonly VERBOSE
-  readonly INSECURE
-  readonly OPTIONS
 }
 
 ##
@@ -167,7 +110,7 @@ parseCommandLine() {
 main() {
   checkEnvironment
   parseCommandLine "$@"
-  performGenericRequest
+  echo "$CURL_OPTS $RESOURCE_PATH" | xargs ./aws-curl
 }
 
 main "$@"
