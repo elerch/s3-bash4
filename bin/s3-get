@@ -19,7 +19,6 @@ set -euo pipefail
 
 readonly PROJECT_PATH=$( cd $(dirname $0) ; cd ../; pwd -P )
 readonly SCRIPT_NAME="$(basename $0)"
-readonly METHOD="GET"
 
 # Includes
 source ${PROJECT_PATH}/lib/s3-common.sh
@@ -33,17 +32,17 @@ source ${PROJECT_PATH}/lib/s3-common.sh
 ##
 printUsageAndExitWith() {
   printf "Usage:\n"
-  printf "  ${SCRIPT_NAME} [-vi] [-k key] [-s file] [-r region] resource_path\n"
+  printf "  ${SCRIPT_NAME} [--debug] [-vi] resource_path\n"
   printf "  ${SCRIPT_NAME} -h\n"
   printf "Example:\n"
-  printf "  ${SCRIPT_NAME} -r eu-central-1 /bucket/file.ext\n"
+  printf "  ${SCRIPT_NAME} /bucket/file.ext\n"
   printf "Options:\n"
-  printf "     --debug\tEnable debugging mode\n"
   printf "  -h,--help\tPrint this help\n"
   printf "  -i,--insecure\tUse http instead of https\n"
-  printf "  -r,--region\tAWS S3 Region. Default to environment variable AWS_DEFAULT_REGION\n"
-  printf "  -v,--verbose\tVerbose output\n"
   printf "     --version\tShow version\n"
+  printf "\n"
+  printf "Other options used will be passed through to aws-curl directly\n"
+
   exit $1
 }
 
@@ -51,23 +50,16 @@ printUsageAndExitWith() {
 # Parse command line and set global variables
 # Arguments:
 #   $@ command line
-# Globals:
-#   AWS_ACCESS_KEY_ID     string
-#   AWS_SECRET_ACCESS_KEY string
-#   AWS_REGION            string
+# Sets the following Globals:
 #   RESOURCE_PATH         string
-#   VERBOSE               bool
-#   INSECURE              bool
-#   DEBUG                 bool
+#   CURL_OPTS             string
+#   AWS_REGION            string
 ##
 parseCommandLine() {
   # Init globals
   AWS_REGION=${AWS_DEFAULT_REGION:-$(getDefaultRegionFromProfile)}
-  AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-$(getAccessKeyFromAWSCredentials)}
-  AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-$(getSecretFromAWSCredentials)}
-  VERBOSE=false
-  INSECURE=false
-  DEBUG=false
+  RESOURCE_PATH="https://"
+  CURL_OPTS=""
 
   # Parse options
   local remaining=
@@ -75,15 +67,15 @@ parseCommandLine() {
   while [[ $# > 0 ]]; do
     local key="$1"
     case ${key} in
-      --version)       showVersionAndExit;;
-      --debug)         DEBUG=true;;
-      -h|--help)       printUsageAndExitWith 0;;
-      -v|--verbose)    VERBOSE=true;;
-      -i|--insecure)   INSECURE=true;;
-      -r|--region)     assertArgument $@; AWS_REGION=$2; shift;;
-      -*)              err "Unknown option $1"
-                       printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE};;
-      *)               remaining="${remaining} \"${key}\"";;
+      -h|--help)          printUsageAndExitWith 0;;
+      -i|--insecure)      RESOURCE_PATH="http://";;
+      -r|--region)        assertArgument $@; AWS_REGION=$2; shift;;
+      -*)                 if [[ ${2:0:1} == "-" ]]; then
+			    CURL_OPTS+="$1 "
+                          else
+                            CURL_OPTS+="$1" "$2 "; shift 
+			  fi;;
+      *)                  remaining="${remaining} \"${key}\"";;
     esac
     shift
   done
@@ -93,41 +85,12 @@ parseCommandLine() {
 
   # Parse arguments
   if [[ $# != 1 ]]; then
-    err "You need to specify the resource path to download e.g. /bucket/file.ext"
+    err "You need to specify the resource path to download"
     printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
   fi
 
-  assertResourcePath "$1"
-  if [[ ${INSECURE} == true ]]; then
-    RESOURCE_PATH="http://"
-  else
-    RESOURCE_PATH="https://"
-  fi
+  assertResourcePath $1
   RESOURCE_PATH+=$(convS3RegionToEndpoint "${AWS_REGION}")"$1"
-
-  if [[ -z "${AWS_REGION}" ]]; then
-    err "AWS Region not specified"
-    printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
-  fi
-  if [[ -z "${AWS_ACCESS_KEY_ID}" ]]; then
-    err "AWS Access Key ID not specified"
-    printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
-  fi
-  if [[ -z "${AWS_SECRET_ACCESS_KEY}" ]]; then
-    err "AWS Secret Access Key not specified"
-    printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
-  fi
-
-  OPTIONS=()
-  # Freeze globals
-  readonly AWS_REGION
-  readonly AWS_ACCESS_KEY_ID
-  readonly AWS_SECRET_ACCESS_KEY
-  readonly RESOURCE_PATH
-  readonly DEBUG
-  readonly VERBOSE
-  readonly INSECURE
-  readonly OPTIONS
 }
 
 ##
@@ -136,8 +99,7 @@ parseCommandLine() {
 main() {
   checkEnvironment
   parseCommandLine "$@"
-  performGenericRequest
-  #performRequest
+  echo "$CURL_OPTS $RESOURCE_PATH" | xargs ./aws-curl
 }
 
 main "$@"
