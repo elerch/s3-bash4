@@ -84,7 +84,7 @@ parseCommandLine() {
 
   # Set the non-parameters back into the positional parameters ($1 $2 ..)
   eval set -- ${remaining}
-echo hi
+
   # Parse arguments
   if [[ $# != 1 ]]; then
     err "You need to specify the resource path to download"
