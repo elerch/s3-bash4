@@ -256,6 +256,29 @@ urlEncode() {
 }
 
 ##
+# Quick sort
+#  $1 array
+##
+qsort() {
+  local pivot i smaller=() larger=()
+  qsort_ret=()
+  (($#==0)) && return 0
+  pivot=$1
+  shift
+  for i; do
+    if [[ "$i" < "$pivot" ]]; then
+      smaller+=( "$i" )
+    else
+      larger+=( "$i" )
+    fi
+  done
+  qsort ${larger[@]+"${larger[@]}"}
+  larger=( ${qsort_ret[@]+"${qsort_ret[@]}"} )
+  qsort ${smaller[@]+"${smaller[@]}"}
+  qsort_ret+=( "$pivot" ${larger[@]+"${larger[@]}"})
+}
+
+##
 # Perform request to S3
 # Uses the following Globals:
 #   AWS_ACCESS_KEY_ID     string
@@ -266,6 +289,7 @@ urlEncode() {
 #   DEBUG                 bool
 #   VERBOSE               bool
 #   INSECURE              bool
+#   OPTIONS               array
 ##
 performGenericRequest() {
   local timestamp=$(date -u "+%Y-%m-%d %H:%M:%S")
@@ -296,37 +320,37 @@ performGenericRequest() {
     cmd+=("--verbose")
   fi
 
-  if [[ ${METHOD} == "PUT" ]]; then
-    cmd+=("-T" "${FILE_TO_UPLOAD}")
-  fi
-
-  if [[ ${METHOD} != "GET" ]]; then
-    cmd+=("-X" "${METHOD}") # curl whines that GET is the default
-  fi
-
-  if [[ ${METHOD} == "PUT" && ! -z "${CONTENT_TYPE}" ]]; then
-    cmd+=("-H" "Content-Type: ${CONTENT_TYPE}")
-    headers+="content-type:${CONTENT_TYPE}\n"
-    headerList+="content-type;"
-  fi
-
   cmd+=("-H" "Host: ${host}")
-  headers+="host:${host}\n"
-  headerList+="host;"
-
-  if [[ ${METHOD} == "PUT" && "${PUBLISH}" == true ]]; then
-    cmd+=("-H" "x-amz-acl: public-read")
-    headers+="x-amz-acl:public-read\n"
-    headerList+="x-amz-acl;"
-  fi
-
   cmd+=("-H" "x-amz-content-sha256: ${payloadHash}")
-  headers+="x-amz-content-sha256:${payloadHash}\n"
-  headerList+="x-amz-content-sha256;"
-
   cmd+=("-H" "x-amz-date: ${isoTimestamp}")
-  headers+="x-amz-date:${isoTimestamp}"
-  headerList+="x-amz-date"
+  for ((inx=0; inx<${#OPTIONS[*]}; inx+=2));
+  do
+    cmd+=("${OPTIONS[inx]}" "${OPTIONS[inx+1]}")
+  done
+
+  headersArr=()
+  for ((inx=0; inx<${#cmd[*]}; inx++));
+  do
+    if [[ ${cmd[inx]} == '-H' ]]; then
+      headersArr+=("${cmd[inx+1]}")
+echo header: "${cmd[inx+1]}"
+    fi
+  done
+  # Sort headers array
+  qsort "${headersArr[@]}"
+  headersArr=("${qsort_ret[@]}")
+
+  # Construct canonical headers
+  for ((inx=0; inx<${#headersArr[*]}; inx++));
+  do
+    IFS=': ' read -r -a headerParts <<< "${headersArr[inx]}"
+    canonicalHeaderName=${headerParts[0],,} #bash 4+
+    headers+="${canonicalHeaderName}:${headerParts[1]}
+" # TODO: Figure out why \n doesn't work here
+    headerList+="${canonicalHeaderName};"
+  done
+  headerList="${headerList%?}" # Remove last letter (the ;)
+  headers="${headers%?}" # Remove last newline
 
   # Generate canonical request
   local canonicalRequest="${METHOD}
