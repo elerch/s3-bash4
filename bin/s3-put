@@ -55,16 +55,12 @@ printUsageAndExitWith() {
 #   $@ command line
 # Sets the following Globals:
 #   RESOURCE_PATH         string
-#   FILE_TO_UPLOAD        string
-#   CONTENT_TYPE          string
-#   PUBLISH               bool
-#   INSECURE              bool
-#   PUBLISH               bool
+#   CURL_OPTS             string
+#   AWS_REGION            string
 ##
 parseCommandLine() {
   # Init globals
   AWS_REGION=${AWS_DEFAULT_REGION:-$(getDefaultRegionFromProfile)}
-  FILE_TO_UPLOAD=
   RESOURCE_PATH="https://"
   CURL_OPTS="-X PUT "
 
