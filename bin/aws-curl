@@ -63,9 +63,7 @@ printUsageAndExitWith() {
 parseCommandLine() {
   # Init globals
   AWS_PROFILE="default"
-  AWS_REGION=${AWS_DEFAULT_REGION:-$(getDefaultRegionFromProfile)}
-  AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-$(getAccessKeyFromAWSCredentials)}
-  AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-$(getSecretFromAWSCredentials)}
+  AWS_REGION=${AWS_DEFAULT_REGION:-$(getDefaultRegionFromProfile $AWS_PROFILE)}
   VERBOSE=false
   INSECURE=false
   DEBUG=false
@@ -93,6 +91,9 @@ parseCommandLine() {
     esac
     shift
   done
+
+  AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-$(getAccessKeyFromAWSCredentials $AWS_PROFILE)}
+  AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-$(getSecretFromAWSCredentials $AWS_PROFILE)}
 
   # Set the non-parameters back into the positional parameters ($1 $2 ..)
   eval set -- ${remaining}
