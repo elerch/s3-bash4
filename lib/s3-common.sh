@@ -299,6 +299,8 @@ performGenericRequest() {
   local requestPath=$RESOURCE_PATH
   local resourcePath=$(printf '%b' "${RESOURCE_PATH}" \
                         |sed 's/^.*:\/\///' |cut -f2- -d/)
+  local queryString=$(echo "$resourcePath" |cut -f2 -d\?)
+  resourcePath=$(echo "$resourcePath" | cut -f1 -d\?)
   resourcePath=$(urlEncode "/$resourcePath"|sed 's/%2F/\//g')
 
   local payloadHash=$(sha256Hash "")
@@ -358,10 +360,19 @@ performGenericRequest() {
   headerList="${headerList%?}" # Remove last letter (the ;)
   headers="${headers%?}" # Remove last newline
 
+  # TODO: handle & in query string
+  # TODO: handle special query strings
+  # TODO: sort query strings
+  # TODO: lowercase query strings
+  if [[ -z "{$queryString}" ]]; then
+echo $queryString
+    IFS='=' read -r -a queryStringParts <<< "${queryString}"
+    queryString=$(urlEncode  ${queryStringParts[0]})=$(urlEncode ${queryStringParts[1]})
+  fi
   # Generate canonical request
   local canonicalRequest="${METHOD}
 ${resourcePath}
-
+${queryString}
 ${headers}
 
 ${headerList}
