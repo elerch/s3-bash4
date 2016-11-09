@@ -85,6 +85,8 @@ parseCommandLine() {
       -H|--header)     assertArgument $@; OPTIONS+=("-H" "$2"); shift;;
       -p|--profile)    assertArgument $@; AWS_PROFILE=$2; shift;;
       -T|--upload-file) assertFileExists $2; OPTIONS+=("-T" "$2"); shift;;
+      -I|--head)       OPTIONS+=("-I");;
+      -s)              OPTIONS+=("-s");;
       -*)              $DEBUG && echo "Warn: unknown option $1"
                        OPTIONS+=("$1" "$2"); shift;;
       *)               remaining="${remaining} \"${key}\"";;

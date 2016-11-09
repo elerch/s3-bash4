@@ -316,7 +316,15 @@ performGenericRequest() {
 
   for ((inx=0; inx<${#OPTIONS[*]}; inx+=2));
   do
-    cmd+=("${OPTIONS[inx]}" "${OPTIONS[inx+1]}")
+    if [[ "${OPTIONS[inx]}" == "-s" ]]; then
+      cmd+=("-s") # TODO: Generalize single item options
+      inx=$((inx-1))
+    elif [[ "${OPTIONS[inx]}" == "-I" ]]; then
+      cmd+=("-I") # TODO: Generalize single item options
+      inx=$((inx-1))
+    else
+      cmd+=("${OPTIONS[inx]}" "${OPTIONS[inx+1]}")
+    fi
     # Generate payload hash
     if [[ "${OPTIONS[inx]}" == "-T" ]]; then
       payloadHash=$(sha256HashFile "${OPTIONS[inx+1]}") 
