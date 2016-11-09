@@ -360,14 +360,20 @@ performGenericRequest() {
   headerList="${headerList%?}" # Remove last letter (the ;)
   headers="${headers%?}" # Remove last newline
 
-  # TODO: handle & in query string
   # TODO: handle special query strings
   # TODO: sort query strings
-  # TODO: lowercase query strings
-  if [[ -z "{$queryString}" ]]; then
-echo $queryString
-    IFS='=' read -r -a queryStringParts <<< "${queryString}"
-    queryString=$(urlEncode  ${queryStringParts[0]})=$(urlEncode ${queryStringParts[1]})
+  if [[ ! -z "{$queryString}" ]]; then
+    IFS='&' read -r -a queryStringKeyValuePairs <<< "${queryString}"
+    queryString=''
+    for ((inx=0; inx<${#queryStringKeyValuePairs[*]}; inx++));
+    do
+      IFS='=' read -r -a queryStringParts <<< "${queryStringKeyValuePairs[inx]}"
+      # At this point we should only have two items: key at index 0, value at 1
+      queryString+=$(urlEncode  ${queryStringParts[0]})\
+=$(urlEncode ${queryStringParts[1]})
+      queryString+='&'
+    done
+    queryString="${queryString%?}" # Remove last newline
   fi
   # Generate canonical request
   local canonicalRequest="${METHOD}
