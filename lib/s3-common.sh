@@ -387,17 +387,22 @@ ${payloadHash}"
   # Generated request hash
   local hashedRequest=$(sha256Hash "${canonicalRequest}")
 
+  # TODO: Determine service by URL
+  # cloudformation.region.amazonaws.com: cloudfront
+  # s3.amazonaws.com: s3
+  local awsService=s3
+
   # Generate signing data
   local stringToSign="AWS4-HMAC-SHA256
 ${isoTimestamp}
-${dateScope}/${AWS_REGION}/s3/aws4_request
+${dateScope}/${AWS_REGION}/$awsService/aws4_request
 ${hashedRequest}"
 
   # Sign data
   local signature=$(sign "${AWS_SECRET_ACCESS_KEY}" "${dateScope}" "${AWS_REGION}" \
-                   "s3" "${stringToSign}")
+                   "${awsService}" "${stringToSign}")
 
-  local authorizationHeader="AWS4-HMAC-SHA256 Credential=${AWS_ACCESS_KEY_ID}/${dateScope}/${AWS_REGION}/s3/aws4_request, SignedHeaders=${headerList}, Signature=${signature}"
+  local authorizationHeader="AWS4-HMAC-SHA256 Credential=${AWS_ACCESS_KEY_ID}/${dateScope}/${AWS_REGION}/${awsService}/aws4_request, SignedHeaders=${headerList}, Signature=${signature}"
   cmd+=("-H" "Authorization: ${authorizationHeader}")
 
   cmd+=("${requestPath}")
