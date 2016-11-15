@@ -278,6 +278,18 @@ qsort() {
   qsort_ret+=( "$pivot" ${larger[@]+"${larger[@]}"})
 }
 
+serviceFromHost() {
+  local service=$(printf "${1}" | sed 's/\..*$//')
+  # special cases for s3
+  if [ ${service:0:2} == 's3' ]; then
+    service='s3' # s3-region.amazonaws.com
+  fi
+  # bucket.s3.amazonaws.com
+  if [ ${1: -16} == 's3.amazonaws.com' ]; then
+    service='s3'
+  fi
+  echo $service
+}
 ##
 # Perform request to S3
 # Uses the following Globals:
@@ -386,11 +398,7 @@ ${payloadHash}"
 
   # Generated request hash
   local hashedRequest=$(sha256Hash "${canonicalRequest}")
-
-  # TODO: Determine service by URL
-  # cloudformation.region.amazonaws.com: cloudfront
-  # s3.amazonaws.com: s3
-  local awsService=s3
+  local awsService=$(serviceFromHost ${host})
 
   # Generate signing data
   local stringToSign="AWS4-HMAC-SHA256
