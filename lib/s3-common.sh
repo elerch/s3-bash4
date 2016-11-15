@@ -362,7 +362,7 @@ performGenericRequest() {
 
   # TODO: handle special query strings
   # TODO: sort query strings
-  if [[ ! -z "{$queryString}" ]]; then
+  if [ ! -z "{$queryString}" ] && [ /${queryString} != ${resourcePath} ]; then
     IFS='&' read -r -a queryStringKeyValuePairs <<< "${queryString}"
     queryString=''
     for ((inx=0; inx<${#queryStringKeyValuePairs[*]}; inx++));
